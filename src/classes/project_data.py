@@ -150,9 +150,9 @@ class ProjectDataStore(JsonDataStore, UpdateInterface):
     def _set(self, key, values=None, add=False, partial_update=False, remove=False):
         """ Store setting, but adding isn't allowed. All possible settings must be in default settings file. """
 
-        log.info(
-            "_set key: %s values: %s add: %s partial: %s remove: %s",
-            key, values, add, partial_update, remove)
+        # log.info(
+            # "_set key: %s values: %s add: %s partial: %s remove: %s",
+            # key, values, add, partial_update, remove)
         parent, my_key = None, ""
 
         # Verify key is valid type
@@ -387,7 +387,10 @@ class ProjectDataStore(JsonDataStore, UpdateInterface):
         from classes.app import get_app
         get_app().updates.load(self._data)
 
-        self.show_waveforms()
+        # Show waveforms for any clips with audio data
+        for c in self._data["clips"]:
+            if c.get("ui") and c.get("ui").get("audio_data"):
+                get_app().window.NewWaveformReady.emit(c["id"])
 
     def rescale_keyframes(self, scale_factor):
         """Adjust all keyframe coordinates from previous FPS to new FPS (using a scale factor)
@@ -403,10 +406,11 @@ class ProjectDataStore(JsonDataStore, UpdateInterface):
     def show_waveforms(self):
         """Find any clips with waveforms enabled, and change their display"""
         for clip in self._data["clips"]:
-            path = clip.get("reader", {}).get("path", "")
-
-            if "show_waveform" in clip.keys() and clip["show_waveform"]:
-                get_audio_data(clip.get("id"), path)
+            get_app().window.NewWaveformReady.emit(clip["id"])
+            # path = clip.get("reader", {}).get("path", "")
+            #
+            # if "show_waveform" in clip.keys() and clip["show_waveform"]:
+            #     get_audio_data(clip.get("id"), path)
 
     def read_legacy_project_file(self, file_path):
         """Attempt to read a legacy version 1.x openshot project file"""

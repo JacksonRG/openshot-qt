@@ -84,9 +84,10 @@ def get_waveform_thread(clip, clip_id, file_path, channel_filter=-1, volume_keyf
         get_app().window.WaveformReady.emit(clip_id, audio_data_this_clip)
         return
 
-    sample = 0
+    sample = 1
     log.debug(f"Generating waveform data. File: {file_id}. Channel: {channel_filter} ")
     for frame_number in range(1, clip.Reader().info.video_length):
+        print(frame_number)
         # Get frame object
         frame = clip.Reader().GetFrame(frame_number)
 
@@ -109,7 +110,7 @@ def get_waveform_thread(clip, clip_id, file_path, channel_filter=-1, volume_keyf
                 audio_data_this_clip.append(sample_value * volume)
             else:
                 # Adjust starting sample for next frame
-                sample = max(0, sample - frame.GetAudioSamplesCount())
+                sample = max(1, sample - frame.GetAudioSamplesCount())
                 break # We are done with this frame
 
             # Jump to next sample needed

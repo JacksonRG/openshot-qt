@@ -30,6 +30,7 @@ import copy
 
 from classes import info
 from classes.app import get_app
+import openshot
 
 
 class QueryObject:
@@ -170,6 +171,45 @@ class Clip(QueryObject):
         path = self.data.get("reader", {}).get("path")
         return os.path.basename(path)
 
+    def calcUiWaveform(self):
+        print("Calc audio data")
+        file_path = self.data.get("reader").get("path")
+        file = File.get(path = file_path)
+
+        # if not file has audio_data
+        if not file.data.get("ui") and file.data.get("ui").get("audio_data"):
+            print("No audio data")
+            return
+            # error, and return
+            # Remove this once error has been proven
+
+        samples = file.data.get("ui").get("audio_data")
+        duration = file.data.get('duration')
+        file_num_frames = file.data.get('video_length')
+        num_samples= len(samples)
+
+        frame = lambda s: round((s/num_samples) * float(file_num_frames))
+        timeline_clip = get_app().window.timeline_sync.timeline.GetClip(self.id)
+        print(f"volume has {timeline_clip.volume.GetCount()} keyframes")
+
+        for i,s in enumerate(samples):
+            frame_number = frame(s)
+            volume = timeline_clip.volume.GetValue(frame_number)
+            samples[i] = volume * s
+        # clip_samples = []
+        # for i in range(1, len(samples) + 1):
+        #     volume = timeline_clip.volume.GetValue(i)
+        #     sample_value = samples[round(timeline_clip.time.GetValue(i))] or 0.0
+        #     clip_samples.append(volume*sample_value)
+        # self.data["ui"] = {"audio_data": clip_samples}
+
+        self.data["ui"] = {"audio_data": samples}
+        self.save()
+        get_app().window.NewWaveformReady.emit(self.id)
+        return
+
+
+
 class Transition(QueryObject):
     """ This class allows Transitions (i.e. timeline effects) to be queried, updated, and deleted from the project data. """
     object_name = "effects"  # Derived classes should define this
@@ -256,6 +296,56 @@ class File(QueryObject):
         file_path = self.absolute_path()
         # Convert path to relative (based on current working directory of Python)
         return os.path.relpath(file_path, info.CWD)
+
+    from enum import Enum, auto
+
+    def calcAudioData(self):
+        if self.data.get("ui", False) and type(self.data.get("ui")) == dict:
+            # Remove this comment when proven
+            if self.data["ui"]["audio_data"] == -999:
+                print("Audio already being calculated. Returning")
+                return
+        if not self.data.get("ui", False):
+            # Placeholder value. Prevent other threads from duplicating this work
+            self.data["ui"] = {"audio_data": -999}
+        else:
+            return True
+
+        # Create clip for reading data
+        temp_clip = openshot.Clip(self.data["path"])
+        temp_clip.Open()
+        temp_clip.Reader().info.has_video = False
+
+        sample_rate = temp_clip.Reader().info.sample_rate
+        samples_per_second = 20
+        sample_divisor = round(sample_rate / samples_per_second)
+
+        # For each frame
+        audio_data = []
+        for frame_num in range(1, temp_clip.Reader().info.video_length):
+            # print(frame_num)
+            frame = temp_clip.Reader().GetFrame(frame_num)
+
+            # for each sample in frame
+            sample_num = 0
+            max_samples = frame.GetAudioSamplesCount()
+            # for sample_num  in range(0, frame.GetAudioSamplesCount()):
+            while sample_num < max_samples:
+                # if frame_num in range(1,10):
+                #     print(f"frame: {frame_num}; sample_num: {sample_num}")
+                # Magnitude Range
+                magnitude_range = sample_divisor
+                if sample_num + magnitude_range > frame.GetAudioSamplesCount():
+                    magnitude_range = frame.GetAudioSamplesCount() - sample_num
+
+                sample_value = frame.GetAudioSample(-1, sample_num, magnitude_range)
+                audio_data.append(sample_value)
+
+                sample_num += sample_divisor
+        self.data["ui"] = {"audio_data": audio_data}
+        self.save()
+        get_app().window.NewWaveformReady.emit(self.data.get("id"))
+        return True
 
 
 class Marker(QueryObject):

@@ -394,12 +394,13 @@ App.controller("TimelineCtrl", function ($scope) {
   // Hide the audio waveform for a clip
   $scope.hideAudioData = function (clip_id) {
     // Find matching clip
+    console.log("hiding audio data")
     for (var clip_index = 0; clip_index < $scope.project.clips.length; clip_index++) {
       if ($scope.project.clips[clip_index].id === clip_id) {
         // Set audio data
         $scope.$apply(function () {
-          $scope.project.clips[clip_index].show_audio = false;
-          $scope.project.clips[clip_index].audio_data = [];
+          console.log("Erasing audio data")
+          $scope.project.clips[clip_index].ui.audio_data = null;
         });
         break;
       }
@@ -409,8 +410,15 @@ App.controller("TimelineCtrl", function ($scope) {
   // Redraw all audio waveforms on the timeline (if any)
   $scope.reDrawAllAudioData = function () {
     // Find matching clip
+    console.log("redrawing frames")
     for (var clip_index = 0; clip_index < $scope.project.clips.length; clip_index++) {
-      if ("audio_data" in $scope.project.clips[clip_index] && $scope.project.clips[clip_index].audio_data.length > 0) {
+      if ($scope.project.clips[clip_index].ui
+        && $scope.project.clips[clip_index].ui.audio_data) {
+        var element = $("#clip_" + $scope.project.clips[clip_index].id);
+        var audio_container = element.find(".audio-container")
+        console.log("fade1")
+        // if (audio_container){ audio_container.fadeOut(100);}
+
         // Redraw audio data (since it has audio data)
         drawAudio($scope, $scope.project.clips[clip_index].id);
       }

@@ -954,31 +954,51 @@ class TimelineWebView(updates.UpdateInterface, WebViewClass):
             self.window.TransformSignal.emit("")
 
     def Show_Waveform_Triggered(self, clip_ids):
+        import threading
         """Show a waveform for the selected clip"""
 
         # Set cursor to waiting
         get_app().setOverrideCursor(QCursor(Qt.WaitCursor))
-        # Loop through each selected clip
-        for clip_id in clip_ids:
+        # Get all selected clips
+        clips = []
+        for c_id in clip_ids:
+            clips.append(Clip.get(id=c_id))
 
-            # Get existing clip object
-            clip = Clip.get(id=clip_id)
-            if not clip:
-                # Invalid clip, skip to next item
-                continue
+        updates = {}
+        for c in clips:
+            # file_id = c.data.get("reader").get("file_id")
+            file_path = c.data.get("reader").get("path")
+            clip_id = c.data.get("id")
+            if not file_path in updates.keys():
+                updates[file_path] = []
+            updates[file_path].append(clip_id)
 
-            file_path = clip.data["reader"]["path"]
+        for f_path in updates:
+            file = File.get(path=f_path)
+            data_ready = file.calcAudioData() #Wait for this to finish
+            if data_ready:
+                for c_id in updates[f_path]:
+                    Clip.get(id=c_id).calcUiWaveform()
+                    # Call for clip to update
+                    # get_app().window.WaveformReady.emit(c_id)
+            else:
+                # retry until true, then upate clips
+                pass
 
-            clip.data["show_waveform"] = True
-            clip.save()
-            c = self.window.timeline_sync.timeline.GetClip(clip_id)
-            if c and c.Reader() and not c.Reader().info.has_single_image:
-                # Find frame 1 channel_filter property
-                channel_filter = c.channel_filter.GetInt(1)
+        # for clip_id in clip_ids:
+        #
+        #     # Get existing clip object
+        #     clip = Clip.get(id=clip_id)
+        #     file = File.get(path=clip.data["reader"]["path"])
+        #     # file.calcAudioData()
+        #     t = threading.Thread(target=File.calcAudioData, args=[file])
+        #     t.daemon = True
+        #     t.start()
+        #     return
+        #     if not clip:
+        #         # Invalid clip, skip to next item
+        #         continue
 
-                # Get audio data in a separate thread (so it doesn't block the UI)
-                channel_filter = channel_filter
-                get_audio_data(clip_id, file_path, channel_filter, c.volume)
 
     def Hide_Waveform_Triggered(self, clip_ids):
         """Hide the waveform for the selected clip"""
@@ -993,18 +1013,33 @@ class TimelineWebView(updates.UpdateInterface, WebViewClass):
                 # Pass to javascript timeline (and render)
                 self.run_js(JS_SCOPE_SELECTOR + ".hideAudioData('" + clip_id + "');")
 
-    def Waveform_Ready(self, clip_id, audio_data):
+    def New_Waveform_Ready(self, clip_id):
+        if not clip_id:
+            return
+        print("calling javascript")
+        try:
+            self.run_js("drawAudio(" + JS_SCOPE_SELECTOR + ", '" + clip_id + "');")
+            # self.run_js(JS_SCOPE_SELECTOR + ".drawAudio('" + clip_id + ");")
+            # self.run_js("drawAudio('" + clip_id + "');")
+        except Exception as e:
+            print(f"error: {e}")
+        # self.run_js(JS_SCOPE_SELECTOR + ".drawAudio('" + clip_id + ");")
+        get_app().restoreOverrideCursor()
+        return
+
+    def Waveform_Ready(self, clip_id):
         """Callback when audio waveform is ready"""
         log.info("Waveform_Ready for clip ID: %s" % (clip_id))
 
         # Convert waveform data to JSON
-        serialized_audio_data = json.dumps(audio_data)
+        # serialized_audio_data = json.dumps(audio_data)
 
         # Set waveform cache (with clip_id as key)
-        self.waveform_cache[clip_id] = serialized_audio_data
+        # self.waveform_cache[clip_id] = serialized_audio_data
 
         # Pass to javascript timeline (and render)
-        self.run_js(JS_SCOPE_SELECTOR + ".setAudioData('" + clip_id + "', " + serialized_audio_data + ");")
+        print("Other javascript call")
+        self.run_js(JS_SCOPE_SELECTOR + ".setAudioData('" + clip_id + ");")
 
         # Restore normal cursor
         get_app().restoreOverrideCursor()
@@ -1911,7 +1946,7 @@ class TimelineWebView(updates.UpdateInterface, WebViewClass):
                 continue
 
             # Determine if waveform needs to be redrawn
-            has_audio_data = clip_id in self.waveform_cache
+            has_audio_data = clip.data.get("ui", False) and clip.data.get("ui").get("audio_data")
 
             if action in [MENU_SLICE_KEEP_LEFT, MENU_SLICE_KEEP_BOTH]:
                 # Get details of original clip
@@ -1965,8 +2000,9 @@ class TimelineWebView(updates.UpdateInterface, WebViewClass):
                     self.waveform_cache[right_clip.id] = self.waveform_cache.get(clip_id, '[]')
 
                     # Pass audio to javascript timeline (and render)
-                    self.run_js(JS_SCOPE_SELECTOR + ".setAudioData('{}',{});"
-                        .format(right_clip.id, self.waveform_cache.get(right_clip.id)))
+                    clip.calcUiWaveform()
+                    # self.run_js(JS_SCOPE_SELECTOR + ".setAudioData('{}');"
+                    #     .format(right_clip.id))
 
             # Save changes
             self.update_clip_data(clip.data, only_basic_props=False, ignore_reader=True)
@@ -3202,6 +3238,7 @@ class TimelineWebView(updates.UpdateInterface, WebViewClass):
 
         # Connect waveform generation signal
         window.WaveformReady.connect(self.Waveform_Ready)
+        window.NewWaveformReady.connect(self.New_Waveform_Ready)
 
         # Local audio waveform cache
         self.waveform_cache = {}

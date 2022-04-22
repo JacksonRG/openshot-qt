@@ -254,11 +254,12 @@ class PropertiesModel(updates.UpdateInterface):
             # Clear selection
             self.parent.clearSelection()
 
-        if c.data.get("show_waveform", False):
+        if c.data.get("ui", False) and c.data.get("ui").get("audio_data"):
             if property_key in ["volume", "channel_filter"]:
-                clip = get_app().window.timeline_sync.timeline.GetClip(c.data.get("id"))
-                get_audio_data(c.data.get("id"), c.data.get("reader", {}).get("path", ""), \
-                               clip.channel_filter.GetInt(1), clip.volume)
+                # clip = get_app().window.timeline_sync.timeline.GetClip(c.data.get("id"))
+                Clip.get(id=c.data["id"]).calcUiWaveform()
+                # get_audio_data(c.data.get("id"), c.data.get("reader", {}).get("path", ""), \
+                #                clip.channel_filter.GetInt(1), clip.volume)
 
     def color_update(self, item, new_color, interpolation=-1, interpolation_details=[]):
         """Insert/Update a color keyframe for the selected row"""
@@ -518,12 +519,6 @@ class PropertiesModel(updates.UpdateInterface):
                             'co': {'X': self.frame_number, 'Y': new_value},
                             'interpolation': 1})
 
-                # If sound has been updated:
-                if clip_data.get("show_waveform",False):
-                    if property_key in ["volume", "channel_filter"]:
-                        clip = get_app().window.timeline_sync.timeline.GetClip(clip_data.get("id"))
-                        get_audio_data(clip_data.get("id"), clip_data.get("reader",{}).get("path",""),\
-                            clip.channel_filter.GetInt(1), clip.volume)
 
             if not clip_updated:
                 # If no keyframe was found, set a basic property
@@ -582,12 +577,22 @@ class PropertiesModel(updates.UpdateInterface):
             # Save changes
             if clip_updated:
                 # Save
+                print("properties model. saving")
                 c.save()
 
                 # Update the preview
                 get_app().window.refreshFrameSignal.emit()
 
                 log.info("Item %s: changed %s to %s at frame %s (x: %s)" % (clip_id, property_key, new_value, self.frame_number, closest_point_x))
+
+            # If sound has been updated:
+            if c.data.get("ui", False) and c.data.get("ui").get("audio_data"):
+                if property_key in ["volume", "channel_filter"]:
+                    print("calling waveform from properties model")
+                    Clip.get(id=c.data["id"]).calcUiWaveform()
+                    # clip = get_app().window.timeline_sync.timeline.GetClip(clip_data.get("id"))
+                    # get_audio_data(clip_data.get("id"), clip_data.get("reader",{}).get("path",""),\
+                    #     clip.channel_filter.GetInt(1), clip.volume)
 
             # Clear selection
             self.parent.clearSelection()

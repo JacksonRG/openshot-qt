@@ -53,12 +53,20 @@ function getTrackContainerHeight() {
   return $("#track-container").height() - track_margin;
 }
 
+// function drawAudio(clip_id){
+//   console.log("Heres's another drawAudio")
+// }
 // Draw the audio wave on a clip
 function drawAudio(scope, clip_id) {
   //get the clip in the scope
+  console.log("draw audio 1")
   var clip = findElement(scope.project.clips, "id", clip_id);
 
-  if (clip.show_audio) {
+  console.log("draw audio 1.01")
+  console.dir(clip.ui)
+  console.dir(clip.ui.audio_data)
+  if (clip.ui && clip.ui.audio_data) {
+    console.log("draw audio 1.1")
     var element = $("#clip_" + clip_id);
 
     // Determine start and stop samples
@@ -70,11 +78,18 @@ function drawAudio(scope, clip_id) {
     // Determine divisor for zoom scale
     var sample_divisor = samples_per_second / scope.pixelsPerSecond;
 
+    console.log("draw audio 2")
     //show audio container
-    element.find(".audio-container").show();
+    // element.find(".audio-container").show();
+    console.log("fade In")
+    element.find(".audio-container").fadeIn(100);
+    // element.find(".audio-container").opacity(50);
 
     // Get audio canvas context
     var audio_canvas = element.find(".audio");
+    if (!audio_canvas) {
+      return;
+    }
     var ctx = audio_canvas[0].getContext("2d", {alpha: false});
 
     // Clear canvas
@@ -85,6 +100,7 @@ function drawAudio(scope, clip_id) {
 
     ctx.strokeStyle = color;
 
+    console.log("draw audio 3")
     // Find the midpoint
     var mid_point = audio_canvas.height() - 8;
     var scale = mid_point;
@@ -95,7 +111,6 @@ function drawAudio(scope, clip_id) {
     ctx.moveTo(0, mid_point);
     ctx.lineTo(audio_canvas.width(), mid_point);
     ctx.stroke();
-
 
     var sample = 0.0,
       // Variables for accumulation
@@ -114,12 +129,13 @@ function drawAudio(scope, clip_id) {
       // Just go as far as we can, then cut off the remaining waveform
       final_sample = (usable_width * sample_divisor) - 1;
     }
+    console.log("draw audio 4")
 
     // Go through all of the (reduced) samples
     // And whenever enough are "collected", draw a block
     for (var i = start_sample; i < final_sample; i++) {
       // Flip negative values up
-      sample = Math.abs(clip.audio_data[i]);
+      sample = Math.abs(clip.ui.audio_data[i]);
       // X-Position of *next* sample
       var x = Math.floor((i + 1 - start_sample) / sample_divisor);
 
@@ -134,6 +150,7 @@ function drawAudio(scope, clip_id) {
         ctx.fillStyle = color_transp;
         ctx.fillRect(last_x, mid_point, x - last_x, -(max * scale));
 
+        console.log("draw audio 5")
         // Draw the fully visible average-bar
         ctx.fillStyle = color;
         ctx.fillRect(last_x, mid_point, x - last_x, -(avg / avg_cnt * scale));
@@ -145,6 +162,7 @@ function drawAudio(scope, clip_id) {
         max = 0;
       }
     }
+    // element.find(".audio-container").fadeIn(100);
   }
 }
 
